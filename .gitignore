@@ -1,0 +1,38 @@
+# This list comes form the GitHub gitignore templates and standard ROS2 development practices
+# https://github.com/github/gitignore/blob/main/ROS.gitignore
+# https://github.com/ros2/ros2_tracing/blob/rolling/.gitignore
+
+# ROS2 Build Directories
+install/
+build/
+log/
+
+# Colcon specific
+.colcon/
+
+# Python compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# ROS2/Catkin workspace files (if applicable)
+.catkin_workspace
+devel/
+
+# IDE and Tooling
+.vscode/
+.idea/
+*.pro.user
+*.swp
+*~
+
+# Compiled binaries and libraries
+*.so
+*.a
+*.o
+
+# Documentation artifacts
+*.dox
+*.wikidoc

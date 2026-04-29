@@ -1,0 +1,2 @@
+Adafruit-Blinka==9.1.0
+adafruit-circuitpython-bno055==5.4.22
