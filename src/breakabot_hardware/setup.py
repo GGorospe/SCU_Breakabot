@@ -12,6 +12,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
     ],
     install_requires=['setuptools'],
+    tests_require=['pytest'],
     zip_safe=True,
     maintainer='student',
     maintainer_email='student@todo.todo',
@@ -23,7 +24,10 @@ setup(
         ],
     },
     entry_points={
-        'console_scripts': [
-        ],
+    'console_scripts': [
+        'imu_node = breakabot_hardware.imu_node:main',
+        'relay_board_node = breakabot_hardware.relay_board_node:main',
+        'roboteq_node = breakabot_hardware.roboteq_node:main',
+    ],
     },
 )

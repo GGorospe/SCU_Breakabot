@@ -1,4 +1,4 @@
-# Project Title
+# Project Break-a-Bot
 
 The Break-a-Bot Quick Start Guide: start here
 
@@ -7,7 +7,7 @@ The Break-a-Bot Quick Start Guide: start here
 - [Getting Started](#getting-started)
 - [Usage](#usage)
 - [Roadmap](#roadmap)
-- [Contributing-TODO](#contributing-TODO)
+- [ToDo](#ToDo)
 - [License](#license)
 - [Contact](#contact)
 
@@ -16,50 +16,26 @@ The break-a-bot project is a small mobile robot for developing and demonstrating
 The break-a-bot is a reaseach tool for students at Santa Clara University.
 
 ### Built With
-* [React.js](https://reactjs.org)
-* [Node.js](https://nodejs.org)
-* [PostgreSQL](https://postgresql.org)
+* [ROS2 Jazzy](https://www.ros.org/)
 
 ## Getting Started
-To get a local copy up and running, follow these steps.
+Important configuration information: 
+* Operating System: Ubuntu 24.04
+* ROS: ROS2 Jazzy Jailisco, ROS_DOMAIN_ID=99
 
-### Prerequisites
-* npm
-  ```sh
-  npm install npm@latest -g
-  ```
 
-### Installation
-1. Clone the repo
-   ```sh
-   git clone https://github.com
-   ```
-2. Install NPM packages
-   ```sh
-   npm install
-   ```
-3. Enter your API in `config.js`
-   ```js
-   const API_KEY = 'ENTER YOUR API';
-   ```
 
 ## Usage
-<!-- Provide examples of how the project can be used. -->
-Use this space to show how your project works. Screenshots or animated GIFs are highly recommended here.
-
-```javascript
-// Example code snippet
-const example = project.init();
-example.run();
-```
+Check the launch files in the breakabot_bringup package for startup configurations 
 
 ## Roadmap
-- [x] Feature 1
-- [ ] Feature 2
-- [ ] Multi-platform support
+- [x] Phase 1: Environment, Hardware Interfaces & Mocks
+- [ ] Phase 2: Locomotion and Math (teleoperation and kinematics)
+- [ ] Phase 3: Integration Tests
+Probably more later
 
-## Contributing
-Contributions make the open-source community an amazing place to learn and create. 
+## ToDo
+A list of features to add
 1. Fork the Project
 2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
 3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
@@ -70,6 +46,6 @@ Contributions make the open-source community an amazing place to learn and creat
 Distributed under the MIT License. See `LICENSE` for more information.
 
 ## Contact
-Your Name - [@twitter_handle](https://twitter.com) - email@example.com
+George Gorospe - ggorospe@scu.edu
 
 Project Link: [https://github.com](https://github.com)
