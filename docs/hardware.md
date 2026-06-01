@@ -3,6 +3,8 @@ Last updates: May 21st, 2026, by G. Gorospe
 
 About: The break-a-bot (BB) is a triangular mobile robot with 3 omni-wheels located at the three corners of the triangle. Each wheel is driven by a brushed DC motor controlled by a RoboteQ SDC2130. This configuration produces an omni-directional robot and is sometimes called a “Kiwi drive.” Although each SDC2130 has two channels and can control two motors, in our configuration both channels are connected to the motor through the use of 6 relays that are used to dynamically change which SDC2130 channel is physically connected to the motor. This configuration allows for physical SPST switch to inject an abrupt open-circuit fault in the controller-to-motor circuit. There are 6 total SPST switches used for high-side open-circuit fault injection on channel 1 and 2 of each of the three SDC2130 controllers.
 
+[Break-a-bot Hardware Block Diagram](/diagrams/Break_a_bot_Hardware_BlockDiagram.png)
+
 Robot Parameters:
 Omni-wheel diameter: 48 mm
 Triangle-Side distance: L: 14”
