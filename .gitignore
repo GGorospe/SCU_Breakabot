@@ -36,3 +36,6 @@ devel/
 # Documentation artifacts
 *.dox
 *.wikidoc
+
+# Apple
+.DS_Store
