@@ -22,8 +22,6 @@ The robot features omnidirectional (holonomic) movement via omni-wheels, redunda
 
 **George Gorospe** masters students worked on the Break-a-bot from 2022 to 2026.
 
-The robot features omnidirectional (holonomic) movement via omni-wheels, redundant subsystems, and experimental breakpoints that allow researchers to simulate real-world failure conditions and observe system response.
-
 ---
 
 ## Features
