@@ -14,11 +14,20 @@ from rclpy.node import Node
 from sensor_msgs.msg import Imu # Standard ROS message for IMUs: orientation quaternio, angular velocity, & linear acceleration
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy # Used to specify the communication behavior in this node
 from std_msgs.msg import Header
-# IMU program libraries
-import board
-import busio
-import adafruit_bno055
 
+# The following try/except structure enables development and testing of the code on laptop vs RPi
+try: 
+    # Hardware (IMU) program libraries
+    import board
+    import busio
+    import adafruit_bno055
+except ImportError:
+        HW_AVAILABLE = False
+
+if not HW_AVAILABLE:
+    self.get_logger().warn(
+        'Hardware libraries not found — running in stub mode'
+    )
 
 # Class definition
 class ImuNode(Node): # This class inherits from the ROS2 Node class

@@ -1,0 +1,118 @@
+# roboteq_params.yaml
+# Parameters for roboteq_node — Break-a-bot hardware interface
+# Package: breakabot_hardware
+# Node:    roboteq_node
+#
+# Usage in launch file:
+#   parameters=[os.path.join(pkg_share, 'config', 'roboteq_params.yaml')]
+#
+# -------------------------------------------------------------------------
+# Finding USB port paths in the lab
+# -------------------------------------------------------------------------
+# RoboteQ controllers appear as /dev/ttyACMx by default, but that index
+# shifts on reboot. The by-id symlinks below are stable across reboots
+# because they encode the controller's USB serial number.
+#
+# Run this on the Pi with all three controllers plugged in:
+#   ls -l /dev/serial/by-id/ | grep -i roboteq
+#
+# You will see three lines like:
+#   ... usb-Roboteq_SDC2130_AB12CD34-if00 -> ../../ttyACM0
+#   ... usb-Roboteq_SDC2130_EF56GH78-if00 -> ../../ttyACM1
+#   ... usb-Roboteq_SDC2130_IJ90KL12-if00 -> ../../ttyACM2
+#
+# Copy the full /dev/serial/by-id/... path (not the -> target) into
+# port_0, port_1, port_2 below.
+#
+# To verify which physical controller is which, plug them in one at a time
+# and note the serial number. Label the cables or controllers accordingly.
+# -------------------------------------------------------------------------
+
+roboteq_node:
+  ros__parameters:
+
+    # ------------------------------------------------------------------
+    # USB port paths
+    # Replace PLACEHOLDER_x with the actual serial number from each
+    # controller once you have identified them in the lab.
+    # ------------------------------------------------------------------
+    port_0: /dev/serial/by-id/usb-Roboteq_SDC2130_PLACEHOLDER_0-if00
+    port_1: /dev/serial/by-id/usb-Roboteq_SDC2130_PLACEHOLDER_1-if00
+    port_2: /dev/serial/by-id/usb-Roboteq_SDC2130_PLACEHOLDER_2-if00
+
+    # Baud rate — 115200 is the SDC2130 default and maximum (per datasheet Table 6)
+    baud_rate: 115200
+
+    # ------------------------------------------------------------------
+    # Control mode
+    # 'open_loop'   : sends !G commands (power level, -1000 to +1000)
+    #                 Upstream node (rpm_scale_node) outputs G-units.
+    #                 Use during Phase 2 before encoders are wired.
+    #
+    # 'closed_loop' : sends !S commands (RPM setpoint)
+    #                 Upstream node (rpm_scale_node) outputs RPM targets.
+    #                 Requires encoder wiring complete AND SDC2130 firmware
+    #                 configured for closed-loop speed mode via Roborun+ PC utility.
+    #                 See Phase 3 checklist in docs/progress.md before switching.
+    # ------------------------------------------------------------------
+    control_mode: open_loop
+
+    # ------------------------------------------------------------------
+    # Channel inversion
+    # One boolean per controller per channel (list of 3 booleans each).
+    # Set true for any channel where the motor spins in the wrong direction.
+    #
+    # How to determine inversion in the lab:
+    #   1. In open_loop mode, send a small positive command (e.g. [100,0,0,0,0,0])
+    #   2. Observe controller 0, channel 1 motor direction
+    #   3. If it spins backward relative to expected Kiwi-drive geometry, set
+    #      invert_ch1: [true, false, false]
+    #   4. Repeat for each channel/controller
+    #
+    # Must be verified before switching to closed_loop mode.
+    # ------------------------------------------------------------------
+    invert_ch1: [false, false, false]   # controller 0, 1, 2 — channel 1
+    invert_ch2: [false, false, false]   # controller 0, 1, 2 — channel 2
+
+    # ------------------------------------------------------------------
+    # Poll rates
+    #
+    # fast_poll_rate_hz: controls how often the fast poll loop runs.
+    #   Each cycle does three things per controller:
+    #     1. Resend the last motor command (watchdog keepalive)
+    #     2. Query ?C — publish encoder counts
+    #     3. Query ?A — publish motor current
+    #   The SDC2130 watchdog defaults to 1 second. At 10 Hz this node
+    #   sends a keepalive every 100ms — a 10x safety margin.
+    #   IMPORTANT: fast_poll_rate_hz must always be > 1.0 Hz (i.e. the
+    #   period must be < watchdog timeout) or the motors will stop.
+    #
+    #   Suggested values:
+    #     Normal operation:      10.0 Hz
+    #     Diagnostic routines:   50.0 Hz
+    #
+    # battery_poll_rate_hz: controls how often ?V is queried and a
+    #   BatteryState message is published. Battery voltage changes on
+    #   the timescale of minutes — 1 Hz is more than sufficient.
+    # ------------------------------------------------------------------
+    fast_poll_rate_hz: 10.0
+    battery_poll_rate_hz: 1.0
+
+    # ------------------------------------------------------------------
+    # Serial read timeout (seconds)
+    # Should be well below 1/encoder_poll_rate_hz so a slow read on one
+    # controller does not stall the entire poll cycle.
+    # At 10 Hz polling, 0.1s timeout gives 30% headroom for 3 controllers.
+    # ------------------------------------------------------------------
+    serial_timeout: 0.1
+
+    # ------------------------------------------------------------------
+    # Motor reference — not used by the node directly, documented here
+    # for the benefit of rpm_scale_node which needs max_rpm for scaling.
+    #
+    # Motor: Pittman LO-COG F5019 (OEM winding variant)
+    # Confirm actual no-load RPM from motor label or datasheet before
+    # using in rpm_scale_node. The F5019 is likely a 14000-series winding
+    # with a no-load speed in the 3050-4230 RPM range (per Pittman LCM bulletin).
+    # ------------------------------------------------------------------
+    max_rpm: 3500.0   # placeholder — confirm from motor label before use
