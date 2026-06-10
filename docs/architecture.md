@@ -8,7 +8,7 @@ ROS2 Jazzy and organized into three packages:
 
 | Package | Role |
 |---|---|
-| `breakabot_hw` | Hardware interface nodes (sensors, actuators) |
+| `breakabot_hardware` | Hardware interface nodes (sensors, actuators) |
 | `breakabot_core` | Control, planning, and analysis nodes |
 | `breakabot_bringup` | Launch files and configuration |
 
@@ -28,8 +28,8 @@ Sensor data is recorded via `ros2 bag` for offline diagnostic prototyping.
 
 ### `imu_node`
 
-**Package:** `breakabot_hw`
-**File:** `breakabot_hw/imu_node.py`
+**Package:** `breakabot_hardware`
+**File:** `breakabot_hardware/imu_node.py`
 **Hardware required:** Adafruit BNO055 IMU via I2C
 
 #### Purpose
@@ -85,7 +85,7 @@ per ROS2 convention. Update when sensor characterization data is available.
 
 ```bash
 # Run the node
-ros2 run breakabot_hw imu_node
+ros2 run breakabot_hardware imu_node
 
 # In a second terminal — confirm topic is publishing
 ros2 topic echo /imu/data
@@ -98,7 +98,7 @@ ros2 param list /imu_node
 ros2 param get /imu_node publish_rate_hz
 
 # Override rate at launch (example)
-ros2 run breakabot_hw imu_node --ros-args -p publish_rate_hz:=10.0
+ros2 run breakabot_hardware imu_node --ros-args -p publish_rate_hz:=10.0
 ```
 
 #### Known limitations / future work
@@ -484,8 +484,9 @@ colcon test-result --verbose
   real by-id paths after lab identification (Phase 1 of test plan).
 - Channel inversion parameters are all `false` pending lab verification
   (Phase 5 of test plan).
-- Motor max RPM (`max_rpm`) for the Pittman F5019 is undetermined. Read from
-  motor label in lab — required before `rpm_scale_node` can be written.
+- Motor max RPM (`max_rpm`) for the Pittman F5019 is undetermined (OEM winding,
+  no public datasheet). Measure unloaded RPM from motor label or via encoder
+  count in the lab and update `max_rpm` in `rpm_scale_params.yaml`.
 - In closed-loop mode, the SDC2130 must be configured via the Roborun+ PC
   utility before switching `control_mode`. See Phase 3 checklist in
   `docs/progress.md`.
@@ -498,6 +499,133 @@ colcon test-result --verbose
 - SDC2130 stream mode (`# C` command) could replace the polled `?C` approach
   for encoder data above ~100 Hz. Relevant if diagnostic routines require
   very high encoder sample rates.
+
+---
+
+### `rpm_scale_node`
+
+**Package:** `breakabot_hardware`
+**File:** `breakabot_hardware/rpm_scale_node.py`
+**Hardware required:** None
+
+#### Purpose
+
+Translates wheel speed targets in RPM (published by `kinematics_node`) into
+native G-unit commands (±1000 scale) consumed by `roboteq_node`. The RoboteQ
+SDC2130 firmware accepts power levels as integers in the range −1000 to +1000;
+this node owns the conversion so neither neighbor has to know about the other's
+units.
+
+In Phase 2 (open-loop) the conversion is:
+
+```
+g_value = int((rpm_target / max_rpm) * 1000)
+g_value = clamp(g_value, -1000, 1000)
+```
+
+In Phase 3 (closed-loop) the node will use encoder feedback from
+`roboteq_node` to run a per-channel PID controller and output corrected G-unit
+commands. The Phase 3 code path is stubbed out — switching to it requires only
+setting `control_mode: closed_loop` in the params yaml and filling in
+`_closed_loop_update()`. No topic interface changes are needed.
+
+#### Subscribed topics
+
+| Topic | Type | Notes |
+|---|---|---|
+| `/roboteq/rpm_cmd` | `std_msgs/Int32MultiArray` | 6-element RPM targets: `[c0_ch1, c0_ch2, c1_ch1, c1_ch2, c2_ch1, c2_ch2]`. Messages with wrong array length are logged as errors and dropped. |
+| `/roboteq/encoder_counts` | `std_msgs/Int32MultiArray` | 6-element encoder counts. Stored for Phase 3 PID use. Ignored in Phase 2. |
+
+#### Published topics
+
+| Topic | Type | Notes |
+|---|---|---|
+| `/roboteq/motor_cmd` | `std_msgs/Int32MultiArray` | 6-element G-unit commands (±1000), same array layout as input. |
+
+#### Parameters
+
+**File:** `breakabot_bringup/config/rpm_scale_params.yaml`
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `control_mode` | `string` | `'open_loop'` | `'open_loop'` (Phase 2) or `'closed_loop'` (Phase 3). If `closed_loop` is set before Phase 3 is implemented, the node logs a warning and falls through to open-loop. |
+| `max_rpm` | `double` | `3000.0` | No-load RPM of the Pittman LO-COG F5019. **Placeholder** — update from motor label in lab. 3000.0 is a conservative estimate for a 24 V Pittman 5000-series winding; under-estimating produces slower-than-commanded motion (safe failure mode). A startup warning fires whenever the placeholder is still in use. |
+| `kp` | `double` | `1.0` | PID proportional gain. Phase 3 only. |
+| `ki` | `double` | `0.0` | PID integral gain. Phase 3 only. |
+| `kd` | `double` | `0.0` | PID derivative gain. Phase 3 only. |
+| `encoder_ppr` | `int` | `512` | Encoder pulses per revolution. Phase 3 only. Update from encoder spec or measured count. |
+
+#### Verification
+
+```bash
+# Run the node
+ros2 run breakabot_hardware rpm_scale_node \
+  --ros-args --params-file ~/breakabot_ws/src/breakabot_bringup/config/rpm_scale_params.yaml
+
+# In a second terminal — confirm motor_cmd is publishing
+ros2 topic echo /roboteq/motor_cmd
+
+# Inject a test RPM command (max_rpm=3000 default → 500 RPM = G-unit 166)
+ros2 topic pub --once /roboteq/rpm_cmd std_msgs/msg/Int32MultiArray \
+  "data: [500, 0, 0, 0, 0, 0]"
+
+# Verify clamping — value above max_rpm should saturate at 1000
+ros2 topic pub --once /roboteq/rpm_cmd std_msgs/msg/Int32MultiArray \
+  "data: [9999, 0, 0, 0, 0, 0]"
+
+# Confirm parameters loaded
+ros2 param list /rpm_scale_node
+ros2 param get /rpm_scale_node max_rpm
+```
+
+#### Unit tests
+
+**File:** `src/breakabot_hardware/test/test_rpm_scale_node.py`
+**Runner:** `src/breakabot_hardware/test/conftest.py`
+
+Tests use the real `rclpy` (requiring `rclpy.init()` via a session-scoped
+pytest fixture in `conftest.py`) and `patch.object` for publisher assertions.
+No hardware dependencies — the node is pure math with no serial or GPIO calls.
+
+Run directly:
+
+```bash
+cd ~/breakabot_ws
+pytest src/breakabot_hardware/test/test_rpm_scale_node.py -v
+```
+
+| Test class | What is covered |
+|---|---|
+| `TestOpenLoopConvert` | Zero RPM, full forward/reverse, half speed, over/under limit clamping, mixed channels, integer truncation, fractional truncation, midpoint at default `max_rpm` |
+| `TestRpmCmdCallback` | Valid message publishes `Int32MultiArray`; all-zeros, full forward, full reverse; over-limit clamping; output type and element types verified |
+| `TestInvalidMessages` | Too-few elements dropped; too-many elements dropped; empty array dropped; encoder callback with wrong length does not update stored counts |
+| `TestControlMode` | `closed_loop` still publishes; closed-loop fallthrough produces same G-values as open-loop |
+| `TestEncoderStorage` | Encoder counts stored on valid message; overwritten on subsequent message |
+
+25 tests total.
+
+#### Design decisions
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| Dedicated node for conversion | `rpm_scale_node` separate from `kinematics_node` and `roboteq_node` | Neither neighbor needs to know the other's unit system; closed-loop upgrade replaces only this node's internal logic |
+| Phase 2 → Phase 3 path | Parameter change + fill in one function; no interface changes | `_closed_loop_update()` stub is wired into the callback today; topic layout is frozen |
+| `max_rpm` default of 3000.0 | Conservative estimate for 24 V Pittman 5000-series | Under-estimating produces slower motion (safe); over-estimating risks over-driving motors |
+| Clamp after conversion | `max(-1000, min(1000, g))` applied to result | Hardware safety gate independent of upstream RPM range |
+| Log-and-drop on wrong array length | Error logged; message discarded; no crash | Preserves last valid motor state; avoids silent zero-commands to unintended channels |
+| `_open_loop_convert()` as pure function | Takes list, returns list; no ROS types | Core math is independently unit-testable without any ROS mocking |
+| Closed-loop fallthrough | Warns every 5 s; passes through to open-loop | Safe default for Phase 2; makes the gap visible in logs without crashing |
+
+#### Known limitations / future work
+
+- `max_rpm` placeholder (3000.0) must be replaced with the measured no-load RPM
+  of the Pittman F5019 motors after lab visit. A startup warning fires as a
+  reminder.
+- Phase 3 `_closed_loop_update()` is a stub. Implement PID logic using
+  `self._latest_encoder_counts`, `self._encoder_ppr`, and per-channel error
+  integration when Phase 3 begins.
+- PID gains (`kp`, `ki`, `kd`) are placeholder defaults. Tuning procedure:
+  raise `kp` until oscillation, then add `ki` to eliminate steady-state error.
 
 ---
 
@@ -567,6 +695,7 @@ Measured offsets (base_link → imu_link) to be updated after lab measurement.
 | `imu_node` | BNO055 via I2C | Yes |
 | `relay_board_node` | 8-ch relay board via GPIO | Yes |
 | `roboteq_node` | 3× RoboteQ SDC2130 via USB serial | Lab only |
+| `rpm_scale_node` | None | Yes |
 | `kinematics_node` | None | Yes |
 | `test_manager_node` | None | Yes |
 | `trajectory_node` | None (sim: turtlesim) | Yes |

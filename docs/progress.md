@@ -41,7 +41,7 @@ breakabot_ws/
 | `imu_node` | `breakabot_hardware` | ✅ Complete, tested | Yes (BNO055) |
 | `relay_board_node` | `breakabot_hardware` | ✅ Complete, tested | Yes (relay board) |
 | `roboteq_node` | `breakabot_hardware` | 🔶 Code complete, untested (lab only) | Lab only |
-| `rpm_scale_node` | `breakabot_hardware` | ⬜ Not started | Yes (no hardware needed) |
+| `rpm_scale_node` | `breakabot_hardware` | 🔶 Code complete, untested | Yes (no hardware needed) |
 | `kinematics_node` | `breakabot_core` | ⬜ Not started | Yes (no hardware needed) |
 | `test_manager_node` | `breakabot_core` | ⬜ Not started | Yes (no hardware needed) |
 | `trajectory_node` | `breakabot_core` | ⬜ Not started | Yes (turtlesim) |
@@ -183,6 +183,70 @@ breakabot_ws/
   and has no local storage
 - All 59 tests passing on Raspberry Pi 5; runtime ~2.5 seconds
 
+### rpm_scale_node (code complete, home-testable)
+
+#### Motor max RPM research
+- Pittman F5019 is an OEM winding variant with no public datasheet
+- Searched manufacturer catalogs and distributor databases — part number
+  does not appear in any public listing
+- Conservative estimate of `3000.0` RPM chosen as `max_rpm` placeholder,
+  based on typical 24 V Pittman 5000-series winding characteristics
+- Under-estimating `max_rpm` is the intentional safe failure mode: robot
+  moves slower than commanded rather than over-driving motors
+- A startup warning fires whenever the placeholder value remains unchanged;
+  real value to be measured from motor label or encoder count in lab
+
+#### Architecture decisions made
+- **Dedicated node for RPM → G-unit conversion** — neither `kinematics_node`
+  nor `roboteq_node` needs to know the other's unit system; conversion is
+  isolated here
+- **Phase 2 → Phase 3 upgrade path** — `_closed_loop_update()` stub is wired
+  into the callback today; switching to closed-loop requires setting
+  `control_mode: closed_loop` in yaml and filling in one function; no topic
+  interface changes needed at transition
+- **`max_rpm` default of 3000.0** — conservative placeholder; under-estimate
+  produces slower-than-commanded motion (safe); startup warning fires as
+  reminder to update after lab visit
+- **Clamp after conversion** — `max(-1000, min(1000, g))` is the hardware
+  safety gate, independent of what upstream sends
+- **Log-and-drop on wrong array length** — preserves last valid motor state;
+  avoids silent zero-commands to unintended channels; no crash
+- **`_open_loop_convert()` as pure function** — takes list, returns list;
+  no ROS types; core math is independently unit-testable without any mocking
+- **Closed-loop fallthrough** — warns every 5 s via `throttle_duration_sec`;
+  passes through to open-loop; safe default for Phase 2
+
+#### Node design
+- **Subscribed:** `/roboteq/rpm_cmd` (`Int32MultiArray`, 6 elements);
+  `/roboteq/encoder_counts` (`Int32MultiArray`, stored for Phase 3, ignored now)
+- **Published:** `/roboteq/motor_cmd` (`Int32MultiArray`, 6 G-unit values ±1000)
+- **Parameters:** `control_mode`, `max_rpm`, `kp`, `ki`, `kd`, `encoder_ppr`
+  (Phase 3 params declared now; unused until Phase 3)
+- **No hardware dependencies** — pure math; fully testable at home
+
+#### Files created
+- `breakabot_hardware/rpm_scale_node.py` — full node implementation
+- `breakabot_bringup/config/rpm_scale_params.yaml` — parameter file with
+  `max_rpm` placeholder, `control_mode`, Phase 3 PID params, and inline
+  documentation including tuning guidance
+- `docs/architecture.md` — `rpm_scale_node` entry fully written; also fixed
+  stale `breakabot_hw` → `breakabot_hardware` package name in overview table
+  and `imu_node` header; updated `roboteq_node` known limitation re: `max_rpm`
+
+#### Unit tests
+- 25 tests written in `src/breakabot_hardware/test/test_rpm_scale_node.py`
+- Uses existing `conftest.py` session-scoped `rclpy_session` fixture
+- Publisher assertions via `patch.object(node.pub, 'publish')` + `call_args[0][0]`
+- No hardware or serial mocking required — node is pure math
+
+| Test class | What is covered |
+|---|---|
+| `TestOpenLoopConvert` | Zero, full forward/reverse, half speed, over/under clamp, mixed channels, int truncation, fractional truncation, midpoint at default `max_rpm` |
+| `TestRpmCmdCallback` | Valid publish path; all-zeros, full forward/reverse; over-limit clamping; output type and element type checks |
+| `TestInvalidMessages` | Too-few, too-many, empty array all dropped; encoder wrong-length does not corrupt stored counts |
+| `TestControlMode` | `closed_loop` still publishes; fallthrough produces same G-values as open-loop |
+| `TestEncoderStorage` | Counts stored on valid message; overwritten on subsequent message |
+
 ---
 
 ## Open issues / current blockers
@@ -214,9 +278,10 @@ Correct values depend on motor mounting and wiring direction, determined
 during Phase 5 of the lab test plan.
 
 ### 6. Motor max RPM undetermined
-The Pittman F5019 motor max RPM must be read from the motor label in the lab.
-This value is required before `rpm_scale_node` can be written and before
-closed-loop mode can be tuned.
+The Pittman F5019 motor max RPM must be measured from the motor label or via
+encoder count in the lab. The `rpm_scale_node` is written and uses a
+conservative placeholder (3000.0 RPM); a startup warning fires as a reminder.
+The real value is needed before speed-critical tests and closed-loop tuning.
 
 ---
 
@@ -227,20 +292,18 @@ closed-loop mode can be tuned.
    run single-channel motor tests, determine and record channel inversions
 2. **Update `roboteq_params.yaml`** — replace placeholder port paths and
    inversion flags with values determined in lab; commit
-3. **Read F5019 motor label** — record max RPM; required for `rpm_scale_node`
+3. **Measure F5019 motor max RPM** — read from motor label or spin unloaded
+   and count encoder ticks; update `max_rpm` in `rpm_scale_params.yaml`
 4. **Fix `relay_board_node.destroy_node()` safe state** — drive all relay
    pins to `Value.INACTIVE` before calling `gpio_request.release()`
 5. **Finalize GPIO pin assignments** — document real pin values in
    `test_params.yaml` once wiring is permanent
-6. **Write `rpm_scale_node`** — RPM → G-unit conversion (open loop);
-   `max_rpm` parameter; testable at home without hardware
-7. **Add `imu_node`, `relay_board_node`, and `roboteq_node` to
-   `hw_only.launch.py`** in `breakabot_bringup`
-8. **Start `kinematics_node`** — Kiwi-drive forward/inverse kinematics;
-   subscribes to `/cmd_vel`, publishes to `/roboteq/motor_cmd` via
-   `rpm_scale_node`; mode gating for teleop vs autonomous (controlled by
-   `test_manager_node`)
-9. **Implement `require_safe_state` interlock** in `relay_board_node` and
+6. **Add `imu_node`, `relay_board_node`, `roboteq_node`, and `rpm_scale_node`
+   to `hw_only.launch.py`** in `breakabot_bringup`
+7. **Start `kinematics_node`** — Kiwi-drive forward/inverse kinematics;
+   subscribes to `/cmd_vel`, publishes to `/roboteq/rpm_cmd`; mode gating
+   for teleop vs autonomous (controlled by `test_manager_node`)
+8. **Implement `require_safe_state` interlock** in `relay_board_node` and
    `roboteq_node` once `test_manager_node` state is defined (Phase 3)
 
 ---
@@ -267,7 +330,10 @@ closed-loop mode can be tuned.
 | Motor command pipeline | `kinematics_node` → `rpm_scale_node` → `roboteq_node` | Separation of geometry, scaling, and hardware; closed-loop upgrade swaps only `rpm_scale_node` |
 | Control mode selection | `test_manager_node` publishes mode; `kinematics_node` gates inputs | Centralizes authority; hardware and command-source nodes are mode-unaware |
 | pytest with real rclpy | Session-scoped `rclpy_session` fixture in `conftest.py` | `rclpy.init()` required once per session; `scope='function'` causes re-init errors |
-| Publisher test assertions | `patch.object(pub, 'publish')` + `call_args` | Real `rclpy.Publisher` has no `last_msg`; `patch.object` intercepts the call cleanly |
+| rpm_scale_node separation | Dedicated node for RPM → G-unit conversion | Neither neighbor knows the other's unit system; closed-loop upgrade fills in one function with no interface changes |
+| rpm_scale_node max_rpm default | Conservative placeholder 3000.0 RPM | Under-estimate produces slower motion (safe); startup warning fires as reminder to update |
+| rpm_scale_node pure conversion function | `_open_loop_convert()` takes list, returns list | Core math testable without any ROS mocking |
+| rpm_scale_node closed-loop fallthrough | Warn + pass through to open-loop | Safe Phase 2 default; gap visible in logs without crashing |
 
 ---
 
@@ -311,6 +377,8 @@ Key tools:  colcon, pytest, ros2bag, rqt, rviz2, turtlesim
 
 ---
 
-*Last updated: session covering roboteq_node design, implementation, unit
-tests (59 passing), lab test plan, architecture.md update, and progress.md
-update. Node code complete; lab testing scheduled for next session.*
+*Last updated: session covering rpm_scale_node design, motor max RPM research
+(Pittman F5019 OEM winding, no public datasheet, conservative 3000.0 RPM
+placeholder), implementation (25 unit tests passing), and architecture.md +
+progress.md updates. Node code complete and home-testable; max RPM measurement
+and lab integration pending.*

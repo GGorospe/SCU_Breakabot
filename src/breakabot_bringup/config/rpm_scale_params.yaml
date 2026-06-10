@@ -1,0 +1,40 @@
+# breakabot_bringup/config/rpm_scale_params.yaml
+#
+# Parameters for rpm_scale_node.
+# See rpm_scale_node.py for full parameter documentation.
+
+rpm_scale_node:
+  ros__parameters:
+
+    # ── Mode ──────────────────────────────────────────────────────────────────
+    # 'open_loop'   : Phase 2 — pure RPM → G-unit conversion (active)
+    # 'closed_loop' : Phase 3 — PID speed control using encoder feedback
+    #                 (falls through to open_loop until Phase 3 is implemented)
+    control_mode: open_loop
+
+    # ── Motor limits ──────────────────────────────────────────────────────────
+    # No-load RPM of the Pittman LO-COG F5019 (OEM winding, no public datasheet).
+    #
+    # *** PLACEHOLDER — update this value from the motor label in lab ***
+    #
+    # Current value (3000.0) is a conservative estimate for a 24 V Pittman
+    # 5000-series winding. Under-estimating max_rpm causes the robot to move
+    # slower than commanded (safe). Over-estimating causes loss of precision
+    # at the top of the RPM range.
+    #
+    # How to measure: spin motor unloaded at rated voltage and read encoder
+    # counts per second → convert to RPM using encoder_ppr below.
+    max_rpm: 3000.0
+
+    # ── Phase 3 PID gains (unused in Phase 2) ─────────────────────────────────
+    # Tune these during Phase 3 closed-loop commissioning.
+    # Start with kp=0.5, ki=0.0, kd=0.0 and increase kp until oscillation,
+    # then add ki to eliminate steady-state error.
+    kp: 1.0
+    ki: 0.0
+    kd: 0.0
+
+    # ── Phase 3 encoder configuration (unused in Phase 2) ─────────────────────
+    # Pulses per revolution of the encoder on each motor shaft.
+    # Update from the encoder spec or by counting ticks per full rotation.
+    encoder_ppr: 512
