@@ -61,6 +61,8 @@ class KiwiKinematics:
         """
         if wheel_radius <= 0:
             raise ValueError(f"wheel_radius must be positive, got {wheel_radius}")
+        if robot_radius <= 0:
+            raise ValueError(f"robot_radius must be positive, got {robot_radius}")
         self.wheel_radius = wheel_radius
         self.robot_radius = robot_radius
 
