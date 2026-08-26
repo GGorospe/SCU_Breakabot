@@ -1,0 +1,74 @@
+# teleop_twist_joy_params.yaml
+# Configuration for teleop_twist_joy on Break-a-bot with Xbox One controller
+# via Bluetooth on Ubuntu 24.04 / ROS2 Jazzy.
+#
+# Controller axis mapping (confirmed on hardware):
+#   0 - Left stick X   (left = positive, right = negative)
+#   1 - Left stick Y   (forward = positive, back = negative)
+#   2 - Right stick X  (left = positive, right = negative)
+#   3 - Right stick Y  (unused)
+#   4 - Right trigger  (1 at rest, -1 fully pressed)
+#   5 - Left trigger   (1 at rest, -1 fully pressed)
+#
+# Controller button mapping (confirmed on hardware):
+#   0  - A
+#   1  - B
+#   2  - X (may vary)
+#   3  - Y (may vary)
+#   4  - (unassigned on this driver)
+#   5  - (unassigned on this driver)
+#   6  - LB  ← deadman button
+#   7  - RB
+#
+# Deadman behavior:
+#   Hold LB (button 6) to enable command publishing.
+#   Release LB → teleop_twist_joy publishes a zero Twist, stopping the robot.
+#   This is the primary safety mechanism during teleoperation.
+#
+# Velocity scales:
+#   scale_linear.x / scale_linear.y : maps ±1.0 stick deflection to m/s
+#   scale_angular.z                 : maps ±1.0 stick deflection to rad/s
+#
+#   Start conservative (0.2 m/s, 0.5 rad/s) for first tests.
+#   Raise gradually once direction and stability are confirmed.
+#   Maximum useful values are constrained by kinematics_node's max_rpm
+#   parameter — exceeding it will saturate rpm_scale_node's output at ±1000.
+
+teleop_twist_joy_node:
+  ros__parameters:
+
+    # --- Deadman button ---
+    # Must be held for any command to be published.
+    # LB on Xbox One Bluetooth driver = button index 6.
+    enable_button: 6
+
+    # --- Axis assignments ---
+    # Left stick Y  → forward/back  (linear.x)
+    # Left stick X  → strafe        (linear.y)
+    # Right stick X → rotation      (angular.z)
+    axis_linear:
+      x: 1    # left stick Y  — forward/back
+      y: 0    # left stick X  — strafe left/right
+    axis_angular:
+      yaw: 2  # right stick X — rotation
+
+    # --- Velocity scales ---
+    # These are the maximum velocities output when the stick is
+    # at full deflection (±1.0). Units: m/s for linear, rad/s for angular.
+    # Increase gradually after confirming correct direction on all axes.
+    scale_linear:
+      x: 0.2      # m/s  — conservative starting value for forward/back
+      y: 0.2      # m/s  — conservative starting value for strafe
+    scale_angular:
+      yaw: 0.5    # rad/s — conservative starting value for rotation
+
+    # --- Turbo (optional, disabled by default) ---
+    # Uncomment and set enable_turbo_button to a button index to enable
+    # a higher-speed mode when that button is held alongside the deadman.
+    # Suggested: RB (button 7) for turbo.
+    # enable_turbo_button: 7
+    # scale_linear_turbo:
+    #   x: 0.5
+    #   y: 0.5
+    # scale_angular_turbo:
+    #   yaw: 1.5

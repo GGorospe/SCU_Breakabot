@@ -7,25 +7,46 @@
 #   parameters=[os.path.join(pkg_share, 'config', 'roboteq_params.yaml')]
 #
 # -------------------------------------------------------------------------
-# Finding USB port paths in the lab
+# Finding USB port paths using the Raspberry Pi
 # -------------------------------------------------------------------------
 # RoboteQ controllers appear as /dev/ttyACMx by default, but that index
-# shifts on reboot. The by-id symlinks below are stable across reboots
-# because they encode the controller's USB serial number.
+# shifts on reboot. We use udev rules to create a mapping based on the 
+# whcih physical port the controller is connected to.
 #
 # Run this on the Pi with all three controllers plugged in:
-#   ls -l /dev/serial/by-id/ | grep -i roboteq
+#   ls -l /dev/serial/by-path/ | grep -i ttyACM
 #
+# The results will show the paths encoding the physical USB port locations
 # You will see three lines like:
-#   ... usb-Roboteq_SDC2130_AB12CD34-if00 -> ../../ttyACM0
-#   ... usb-Roboteq_SDC2130_EF56GH78-if00 -> ../../ttyACM1
-#   ... usb-Roboteq_SDC2130_IJ90KL12-if00 -> ../../ttyACM2
+# lrwxrwxrwx 1 root root 13 Jun 11 23:21 platform-xhci-hcd.0-usb-0:1:1.0 -> ../../ttyACM2
+# lrwxrwxrwx 1 root root 13 Jun 11 23:21 platform-xhci-hcd.0-usb-0:2:1.0 -> ../../ttyACM1
+# lrwxrwxrwx 1 root root 13 Jun 11 23:21 platform-xhci-hcd.0-usbv2-0:1:1.0 -> ../../ttyACM2
+# lrwxrwxrwx 1 root root 13 Jun 11 23:21 platform-xhci-hcd.0-usbv2-0:2:1.0 -> ../../ttyACM1
+# lrwxrwxrwx 1 root root 13 Jun 11 23:21 platform-xhci-hcd.1-usb-0:2:1.0 -> ../../ttyACM0
+# lrwxrwxrwx 1 root root 13 Jun 11 23:21 platform-xhci-hcd.1-usbv2-0:2:1.0 -> ../../ttyACM0
 #
-# Copy the full /dev/serial/by-id/... path (not the -> target) into
-# port_0, port_1, port_2 below.
+# Here we eliminate repeates that are associated with USBv2 to get the result:
+# lrwxrwxrwx 1 root root 13 Jun 11 23:21 platform-xhci-hcd.0-usb-0:1:1.0 -> ../../ttyACM2
+# lrwxrwxrwx 1 root root 13 Jun 11 23:21 platform-xhci-hcd.0-usb-0:2:1.0 -> ../../ttyACM1
+# lrwxrwxrwx 1 root root 13 Jun 11 23:21 platform-xhci-hcd.1-usb-0:2:1.0 -> ../../ttyACM0
 #
 # To verify which physical controller is which, plug them in one at a time
-# and note the serial number. Label the cables or controllers accordingly.
+# and note the serial address. Example usb-0:1:1.0 or usb-0:2:1.0. 
+# With this informatin we can now create udev rules to turn these into permanent, human-readable symlinks.
+# EXAMPLE:
+# SUBSYSTEM=="tty", ENV{ID_PATH}=="platform-xhci-hcd.0-usb-0:1:1.0", SYMLINK+="roboteq_0"
+# SUBSYSTEM=="tty", ENV{ID_PATH}=="platform-xhci-hcd.0-usb-0:2:1.0", SYMLINK+="roboteq_1"
+# SUBSYSTEM=="tty", ENV{ID_PATH}=="platform-xhci-hcd.1-usb-0:2:1.0", SYMLINK+="roboteq_2"
+
+# Place these rules in a new document:
+# sudo nano /etc/udev/rules.d/99-roboteq.rules
+# 
+# Then save and reload udev:
+# sudo udevadm control --reload-rules
+# sudo udevadm trigger
+#
+# Verify that all three symlinks have been created with the following command:
+# ls -l /dev/roboteq_*
 # -------------------------------------------------------------------------
 
 roboteq_node:
@@ -33,12 +54,12 @@ roboteq_node:
 
     # ------------------------------------------------------------------
     # USB port paths
-    # Replace PLACEHOLDER_x with the actual serial number from each
-    # controller once you have identified them in the lab.
+    # These port parameters are based on the USB port used to connect each controller.
+    # Changing the configuration of USB cables in the USB ports will cause a mis-mathc.
     # ------------------------------------------------------------------
-    port_0: /dev/serial/by-id/usb-Roboteq_SDC2130_PLACEHOLDER_0-if00
-    port_1: /dev/serial/by-id/usb-Roboteq_SDC2130_PLACEHOLDER_1-if00
-    port_2: /dev/serial/by-id/usb-Roboteq_SDC2130_PLACEHOLDER_2-if00
+    port_0: /dev/roboteq_0
+    port_1: /dev/roboteq_1
+    port_2: /dev/roboteq_2
 
     # Baud rate — 115200 is the SDC2130 default and maximum (per datasheet Table 6)
     baud_rate: 115200

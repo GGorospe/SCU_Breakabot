@@ -1,0 +1,31 @@
+# kinematics_params.yaml
+# Parameters for kinematics_node — Break-a-bot Kiwi-drive inverse kinematics
+# Package: breakabot_core
+# Node:    kinematics_node
+#
+# See kinematics_node.py for the full data path and topic documentation.
+
+kinematics_node:
+  ros__parameters:
+
+    # ── Robot geometry ────────────────────────────────────────────────────────
+    # Both values are in METERS and feed the Kiwi-drive inverse kinematics
+    # (KiwiKinematics in breakabot_core/kiwi_kinematics.py).
+    #
+    # wheel_radius scales the entire output (larger wheel → fewer rad/s for the
+    #   same body speed). robot_radius (center-to-wheel distance, 'l' in the
+    #   geometry matrix) scales only the rotational (omega) contribution.
+    #
+    # The matrix STRUCTURE is independent of these magnitudes, so development
+    # and unit tests are valid with rough values; only the absolute speed
+    # scaling depends on getting these measured accurately.
+    #
+    # How to measure:
+    #   wheel_radius — measure the omniwheel outer radius (contact circle) with
+    #     calipers; use rolling radius, not hub radius.
+    #   robot_radius — perpendicular distance from the chassis center of
+    #     rotation to each wheel's ground-contact point. For an equilateral
+    #     Kiwi all three are equal, so a single value is correct.
+
+    wheel_radius: 0.048      # meters — confirm against the physical wheel
+    robot_radius: 0.205232   # meters — confirm against the physical chassis

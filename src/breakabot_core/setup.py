@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+	    'kinematics_node = breakabot_core.kinematics_node:main',
         ],
     },
 )

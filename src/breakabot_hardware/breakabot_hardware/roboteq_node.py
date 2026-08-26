@@ -374,17 +374,20 @@ class RoboteqNode(Node):
         Write a command string to a controller. Acquires the controller's lock
         to prevent interleaving with the poll callbacks.
 
-        The controller responds to non-query commands with '+\r' (ACK) or '-' (error).
-        We read and discard the ACK — we don't need it and leaving it in the buffer
-        would corrupt subsequent query reads.
+        SDC2130 echo behavior (confirmed on hardware):
+          Write: b'!G 1 0\r!G 2 0\r'
+          Reply: b'!G 1 0\r+\r!G 2 0\r+\r'
+        Each individual command returns its echo and ACK concatenated as one
+        readline() (the controller uses \r, not \n, as a line terminator, so
+        readline() reads until the first \n — which never comes — and returns
+        on timeout, collecting the full echo+ACK pair in one call).
+        Two commands concatenated = two readline() calls to fully drain the buffer.
         """
         with ctrl['lock']:
             try:
                 ctrl['port'].write(command.encode('ascii'))
-                # Read and discard ACK lines (one '+\r' per command sent).
-                # Two commands were concatenated, so read two ACKs.
-                ctrl['port'].readline()
-                ctrl['port'].readline()
+                ctrl['port'].readline()   # echo + ACK for command 1 (!G 1 x\r+\r)
+                ctrl['port'].readline()   # echo + ACK for command 2 (!G 2 x\r+\r)
             except serial.SerialException as e:
                 self.get_logger().error(
                     f'Controller {controller_index}: serial write error — {e}',
@@ -396,15 +399,25 @@ class RoboteqNode(Node):
         """
         Send a query command and return the value portion of the reply.
 
-        The controller replies with 'PREFIX=value\r'. This method strips the
-        prefix and returns the raw value string (e.g. '246:135:4730' for ?V).
+        SDC2130 echo behavior (confirmed on hardware):
+          Write: b'?C\r'
+          Reply: b'?C\rC=0:0\r'
+        The echo and reply arrive together in one readline() call because the
+        controller uses \r (not \n) as its line terminator. readline() collects
+        until \n (which never comes) and returns on timeout, giving us the full
+        echo+reply string in one call.
+        Split on \r and take the last non-empty segment to extract the reply.
         Returns an empty string on error so callers can handle gracefully.
         """
         with ctrl['lock']:
             try:
-                ctrl['port'].reset_input_buffer()
                 ctrl['port'].write(query.encode('ascii'))
-                reply = ctrl['port'].readline().decode('ascii', errors='replace').strip()
+                raw = ctrl['port'].readline().decode('ascii', errors='replace').strip()
+
+                # Strip echo — split on \r, take last non-empty segment
+                # e.g. '?C\rC=0:0' → ['?C', 'C=0:0'] → 'C=0:0'
+                segments = [s for s in raw.split('\r') if s]
+                reply = segments[-1] if segments else ''
 
                 expected = f'{prefix}='
                 if reply.startswith(expected):

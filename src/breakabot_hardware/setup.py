@@ -28,6 +28,7 @@ setup(
         'imu_node = breakabot_hardware.imu_node:main',
         'relay_board_node = breakabot_hardware.relay_board_node:main',
         'roboteq_node = breakabot_hardware.roboteq_node:main',
+        'rpm_scale_node = breakabot_hardware.rpm_scale_node:main',
     ],
     },
 )
